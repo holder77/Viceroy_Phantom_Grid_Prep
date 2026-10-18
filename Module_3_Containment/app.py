@@ -167,15 +167,14 @@ Malicious File: systemd-update
 
             if (base === '?') {
                 printOutput(`Available Commands:
-  ?           - Show this help menu
-  ufw status  - Print current firewall table
-  ping        - Send ICMP ECHO_REQUEST to network hosts
-  lsof        - List open files/connections
-  ls          - List directory contents
-  kill        - Terminate a process
-  rm          - Remove files
-  iptables    - Manage firewall rules
-  clear       - Clear terminal screen`);
+  ?                  - Show this help menu
+  ufw status         - Print current firewall table
+  ping <IP>          - Send ICMP ECHO_REQUEST to network hosts
+  lsof               - List open files/connections
+  ls                 - List directory contents
+  kill <PID>         - Terminate a process
+  rm <file_name>     - Remove files
+  clear              - Clear terminal screen`);
             } 
             else if (base === 'clear') {
                 outputContainer.innerHTML = '';
