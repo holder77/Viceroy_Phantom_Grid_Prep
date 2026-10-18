@@ -59,27 +59,35 @@ HTML_PAGE = """
 </head>
 <body>
     <div id="terminal">
-        <!-- The Intro Screen -->
-        <div id="intro-screen">
-            <div>=======================================================================================</div>
-            <div>                           SENTINEL-01 INCIDENT RESPONSE       </div>
-            <div>=======================================================================================</div><br>
-            <div>You have successfully gained access to the terminal of SENTINEL-01 (Module 2)</div><br>
-            <div>Now you need to perform phase 3 of incident response: Contain, Eradicate, and Recovery.</div><br>
-            <div>Intel (Module 1): .</div><br>
-            <div>Malicious Host: 192.168.100.55</div><br>
-            <div>Malicious File: systemd-update</div><br>
-            <div><strong>TASKS:</strong></div>
-            <div>- Identify and remove the rogue firewall rule.</div>
-            <div>- Block the malicious C2 IP address.</div>
-            <div>- Terminate the malicious process in memory.</div>
-            <div>- Delete the malware payload from the disk.</div>
-            <div>- Add a firewall rule to allow Mission Control (1.1.1.1).</div>
-            <div>- Ping Mission Control (1.1.1.1) to verify recovery and receive your flag.</div><br>
-            <div><em>(Type '?' at any time for a list of available commands).</em></div><br><br>
-            <div class="prompt" style="animation: blink 1s step-end infinite;">PRESS ANY KEY TO CONTINUE...</div>
+<!-- The Intro Screen -->
+        <div id="intro-screen" style="white-space: pre-wrap;">
+===============================================================================
+                         SENTINEL-01 INCIDENT RESPONSE       
+===============================================================================
+
+You have successfully gained access to the terminal of SENTINEL-01 (Module 2).
+
+Perform phase 3 of incident response: Contain, Eradicate, and Recovery.
+
+Intel (Module 1):
+Malicious Host: 192.168.100.55
+Malicious File: systemd-update
+
+<strong>TASKS:</strong>
+- Identify and remove the rogue firewall rule.
+- Block the malicious C2 IP address.
+- Terminate the malicious process in memory.
+- Delete the malware payload from the disk.
+- Add a firewall rule to allow Mission Control (1.1.1.1).
+- Ping Mission Control (1.1.1.1) to verify recovery and receive your flag.
+
+<em>(Type '?' at any time for a list of available commands).</em>
+
+<span class="prompt" style="animation: blink 1s step-end infinite;">PRESS ANY KEY TO CONTINUE...</span>
         </div>
 
+        
+        
         <!-- The Main Terminal (Hidden Initially) -->
         <div id="terminal-screen" style="display:none;">
             <div id="output-container"></div>
