@@ -23,44 +23,54 @@ class SentinelConsole(cmd.Cmd):
 
     def __init__(self):
         super().__init__()
-        # The whitelist of allowed Linux commands
+        # Whitelist of allowed Linux commands
         self.allowed_cmds = ['lsof', 'netstat', 'ps', 'top', 'ss', 'iptables', 'ufw', 'rm', 'ls', 'cd', 'pwd', 'clear', 'cat', 'grep', 'pgrep']
         self.setup_env()
 
     def setup_env(self):
         print("[*] Initializing SENTINEL-01 Live Environment...")
         
-        # 1. Stage the Fake Malware
-        os.makedirs('/dev/shm/.cache', exist_ok=True)
-        self.payload = '/dev/shm/.cache/systemd-update'
+        # 1. Stage the Malware and Decoy SVSS Files
+        self.cache_dir = '/dev/shm/.cache'
+        os.makedirs(self.cache_dir, exist_ok=True)
+        
+        self.payload = f'{self.cache_dir}/systemd-update'
         with open(self.payload, 'w') as f:
             f.write('#!/bin/bash\nwhile true; do nc -u 192.168.100.55 4444 2>/dev/null; sleep 2; done\n')
         os.chmod(self.payload, 0o755)
 
-        # 2. Spawn processes in the background
-        self.p_good = subprocess.Popen(['bash', '-c', 'exec -a cuas_sensor_daemon nc -u 10.0.0.50 514 >/dev/null 2>&1'])
-        self.p_decoy = subprocess.Popen(['bash', '-c', 'exec -a ntp_sync nc -u 8.8.8.8 123 >/dev/null 2>&1'])
+        with open(f'{self.cache_dir}/svss_telemetry.log', 'w') as f:
+            f.write('SVSS Satellite Uplink active. VE and TI metrics nominal.\n')
+        with open(f'{self.cache_dir}/ground_calibration.bin', 'w') as f:
+            f.write('010101010101010101\n')
+
+        # 2. Spawn Mission Daemons and Malware
+        self.p_good1 = subprocess.Popen(['bash', '-c', 'exec -a cuas_sensor_daemon nc -u 10.0.0.50 514 >/dev/null 2>&1'])
+        self.p_good2 = subprocess.Popen(['bash', '-c', 'exec -a svss_uplink nc -u 10.0.0.200 443 >/dev/null 2>&1'])
+        self.p_good3 = subprocess.Popen(['bash', '-c', 'exec -a svss_ground_relay nc -u 10.0.0.100 8080 >/dev/null 2>&1'])
         self.p_bad = subprocess.Popen(['bash', '-c', f'exec -a systemd-update {self.payload} >/dev/null 2>&1'])
-        time.sleep(1) # Give the sockets a second to open
+        time.sleep(1)
 
     def cleanup(self):
         print("\n[*] Terminating simulated network connections...")
-        for p in [self.p_good, self.p_decoy, self.p_bad]:
+        for p in [self.p_good1, self.p_good2, self.p_good3, self.p_bad]:
             try:
                 p.kill()
             except:
                 pass
         
-        # Kill any lingering malware processes
         subprocess.run("pkill -f systemd-update >/dev/null 2>&1", shell=True)
         
-        # Delete the malware file
         if os.path.exists(self.payload):
             os.remove(self.payload)
             
-        # Flush the specific iptables rules to clean up the environment for the next try
         subprocess.run("sudo iptables -D OUTPUT -d 192.168.100.55 -j DROP >/dev/null 2>&1", shell=True)
         subprocess.run("sudo iptables -D OUTPUT -d 10.0.0.50 -j ACCEPT >/dev/null 2>&1", shell=True)
+
+    def do_EOF(self, arg):
+        """Catches the End-of-File signal to prevent infinite loops."""
+        self.cleanup()
+        return True
 
     def do_1(self, arg):
         """Print current firewall table"""
@@ -94,7 +104,7 @@ class SentinelConsole(cmd.Cmd):
             print("[-] Malware process is still running in memory! Remember to terminate the PID.")
             err = True
         except subprocess.CalledProcessError:
-            pass # Process not found, which is good
+            pass 
             
         if os.path.exists(self.payload):
             print("[-] Process killed, but the malware file still exists on disk! Find the path and delete it.")
@@ -112,7 +122,6 @@ class SentinelConsole(cmd.Cmd):
 
     def default(self, line):
         """Intercepts all other commands typed into the console"""
-        # Allow them to just type 1, 2, 3, or 4 without the 'do_' prefix
         if line.strip() in ['1', '2', '3', '4']:
             getattr(self, f"do_{line.strip()}")("")
             return
@@ -122,22 +131,44 @@ class SentinelConsole(cmd.Cmd):
             return
 
         base_cmd = cmd_parts[0]
-        
-        # If they use sudo, strip it and check the actual command
         if base_cmd == 'sudo' and len(cmd_parts) > 1:
             base_cmd = cmd_parts[1]
 
-        # The Sec+ PBQ Kill Constraint
+        # 1. Firewall Manipulations (Protecting SVSS infrastructure)
+        if base_cmd in ['iptables', 'ufw']:
+            protected_ips = ['10.0.0.50', '10.0.0.100', '10.0.0.200']
+            if 'DROP' in cmd_parts or 'REJECT' in cmd_parts or 'deny' in cmd_parts:
+                for ip in protected_ips:
+                    if ip in line:
+                        print(f"[-] CRITICAL ERROR: Action blocked! You cannot sever the connection to friendly mission asset {ip}.")
+                        return
+
+        # 2. Process Termination Restrictions
         if base_cmd == 'kill':
             if '-9' not in cmd_parts:
                 print("[-] Action not allowed: That signal isn't strong enough to terminate the rogue service. Try the -9 flag instead.")
-            else:
-                subprocess.run(line, shell=True)
+                return
+            
+            target_pid = cmd_parts[-1]
+            try:
+                cmd_line = subprocess.check_output(f"ps -p {target_pid} -o command=", shell=True, text=True).strip()
+                if 'cuas_sensor_daemon' in cmd_line or 'svss_' in cmd_line:
+                    print(f"[-] CRITICAL ERROR: Process {target_pid} is a critical mission daemon! Action blocked to preserve uptime.")
+                    return
+            except subprocess.CalledProcessError:
+                pass
+            
+            subprocess.run(line, shell=True)
             return
 
-        # General whitelist enforcer
+        # 3. File Deletion Restrictions
+        if base_cmd == 'rm':
+            if 'telemetry' in line or 'calibration' in line:
+                print("[-] CRITICAL ERROR: Action blocked! You are attempting to delete critical SVSS mission data.")
+                return
+
+        # 4. Standard Allowed Commands
         if base_cmd in self.allowed_cmds:
-            # Handle native directory changes so they actually work in Python
             if base_cmd == 'cd':
                 try:
                     os.chdir(cmd_parts[1] if len(cmd_parts) > 1 else os.path.expanduser('~'))
