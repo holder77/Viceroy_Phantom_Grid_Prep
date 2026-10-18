@@ -14,11 +14,11 @@ HTML_PAGE = """
             font-family: 'Courier New', Courier, monospace; 
             margin: 0; 
             padding: 20px; 
-            overflow: hidden; /* Prevents whole-page scrolling */
+            overflow: hidden; 
         }
         #terminal { 
             height: 95vh; 
-            overflow-y: auto; /* Enables scrolling only inside the terminal window */
+            overflow-y: auto; 
             padding-bottom: 20px;
         }
         .prompt { color: #ff3366; }
@@ -34,24 +34,56 @@ HTML_PAGE = """
             margin-left: 10px; 
         }
         .output { white-space: pre-wrap; margin-bottom: 5px; line-height: 1.3; }
+        #intro-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 80vh;
+            line-height: 1.5;
+            font-size: 16px;
+        }
+        .copy-btn {
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            padding: 5px 15px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+        .copy-btn:hover { background: #fff; box-shadow: 0 0 10px #fff; }
     </style>
 </head>
 <body>
     <div id="terminal">
-        <div class="output">==========================================
-      SENTINEL-01 INCIDENT RESPONSE       
-==========================================
- 1: Print current firewall table
- 2: Scan system network for flag
- 3: Scan system health for flag
+        <!-- The Intro Screen -->
+        <div id="intro-screen">
+            <div>==========================================</div>
+            <div>      SENTINEL-01 INCIDENT RESPONSE       </div>
+            <div>==========================================</div><br>
+            <div>You have successfully gained access to the terminal of SENTINEL-01 (as done in module 2: Identify every access point).</div><br>
+            <div>Now you need to perform phase 3 of incident response: Contain, Eradicate, and Recovery.</div><br>
+            <div><strong>TASKS:</strong></div>
+            <div>- Identify and remove the rogue firewall rule.</div>
+            <div>- Block the malicious C2 IP address.</div>
+            <div>- Terminate the malicious process in memory.</div>
+            <div>- Delete the malware payload from the disk.</div>
+            <div>- Add a firewall rule to allow Mission Control (1.1.1.1).</div>
+            <div>- Ping Mission Control (1.1.1.1) to verify recovery and receive your flag.</div><br>
+            <div><em>(Type '?' at any time for a list of available commands).</em></div><br><br>
+            <div class="prompt" style="animation: blink 1s step-end infinite;">PRESS ANY KEY TO CONTINUE...</div>
+        </div>
 
-* You are in a restricted terminal environment.
-* Enter '?' and press Enter to view available commands.
-==========================================</div>
-        <div id="output-container"></div>
-        <div class="input-line">
-            <span class="prompt">root@sentinel-01:~#</span>
-            <input type="text" id="cmd" autocomplete="off" autofocus>
+        <!-- The Main Terminal (Hidden Initially) -->
+        <div id="terminal-screen" style="display:none;">
+            <div id="output-container"></div>
+            <div class="input-line">
+                <span class="prompt">root@sentinel-01:~#</span>
+                <input type="text" id="cmd" autocomplete="off">
+            </div>
         </div>
     </div>
 
@@ -59,15 +91,35 @@ HTML_PAGE = """
         const input = document.getElementById('cmd');
         const outputContainer = document.getElementById('output-container');
         const terminal = document.getElementById('terminal');
+        const introScreen = document.getElementById('intro-screen');
+        const terminalScreen = document.getElementById('terminal-screen');
+        
+        let introActive = true;
         
         // Game State Variables
-        let fw_allow_c2 = true;   // Attacker added this rogue rule (Must be deleted)
-        let fw_block_c2 = false;  // Team must add this
-        let fw_allow_new = false; // Team must add this (1.1.1.1)
-        
-        let systemd_alive = true; // Bad process
-        let payload_exists = true; // Bad file
+        let fw_allow_c2 = true;   // Rogue rule (Needs deletion)
+        let fw_block_c2 = false;  // Needs DROP rule
+        let fw_allow_new = false; // Needs ACCEPT rule for 1.1.1.1
+        let systemd_alive = true; // Needs kill -9
+        let payload_exists = true; // Needs rm
 
+        // Listen for the initial keypress to clear the intro
+        document.addEventListener('keydown', function(e) {
+            if (introActive) {
+                introActive = false;
+                introScreen.style.display = 'none';
+                terminalScreen.style.display = 'block';
+                input.focus();
+                e.preventDefault(); // Prevent the key from typing into the input box
+            }
+        });
+
+        // Auto-focus input field if user clicks anywhere on the terminal
+        document.body.addEventListener('click', function() {
+            if (!introActive) input.focus();
+        });
+
+        // Handle Terminal Commands
         input.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 const cmd = input.value.trim();
@@ -82,36 +134,42 @@ HTML_PAGE = """
             div.className = 'output';
             div.innerHTML = text;
             outputContainer.appendChild(div);
-            
-            // Auto-scroll to the absolute bottom after new text is added
             terminal.scrollTop = terminal.scrollHeight;
         }
+
+        // Global Copy Function for the Button
+        window.copyFlag = function(btnElement, flagText) {
+            navigator.clipboard.writeText(flagText).then(function() {
+                btnElement.innerText = "COPIED TO CLIPBOARD!";
+                btnElement.style.background = "#fff";
+            }).catch(function(err) {
+                btnElement.innerText = "COPY FAILED (MANUAL HIGHLIGHT REQUIRED)";
+            });
+        };
 
         function processCommand(cmd) {
             if (cmd === '') return;
             
-            // Normalize command
             let cleanCmd = cmd.replace(/^sudo\s+/, '').trim();
             const parts = cleanCmd.split(' ').filter(Boolean);
             const base = parts[0];
 
             if (base === '?') {
                 printOutput(`Available Commands:
-  ?         - Show this help menu
-  1         - Print current firewall table
-  2         - Scan system network for flag
-  3         - Scan system health for flag
-  lsof      - List open files/connections
-  ls        - List directory contents
-  kill      - Terminate a process
-  rm        - Remove files
-  iptables  - Manage firewall rules
-  clear     - Clear terminal screen`);
+  ?           - Show this help menu
+  ufw status  - Print current firewall table
+  ping        - Send ICMP ECHO_REQUEST to network hosts
+  lsof        - List open files/connections
+  ls          - List directory contents
+  kill        - Terminate a process
+  rm          - Remove files
+  iptables    - Manage firewall rules
+  clear       - Clear terminal screen`);
             } 
             else if (base === 'clear') {
                 outputContainer.innerHTML = '';
             }
-            else if (base === '1') {
+            else if (base === 'ufw' && parts[1] === 'status') {
                 let out = "Chain OUTPUT (policy ACCEPT)\\n";
                 out += "num  target     prot opt source               destination\\n";
                 let num = 1;
@@ -128,23 +186,35 @@ HTML_PAGE = """
                 out += "Delete Rule:    iptables -D OUTPUT &lt;LINE_NUMBER&gt;";
                 printOutput(out);
             }
-            else if (base === '2') {
-                printOutput("[*] Analyzing firewall rules...");
-                if (!fw_allow_c2 && fw_block_c2 && fw_allow_new) {
-                    printOutput("[+] Network Secured. FLAG_PART_1: viceroy{f1r3w4ll_");
+            else if (base === 'ping') {
+                if (parts[1] === '1.1.1.1' || (parts[1] === '-c' && parts[3] === '1.1.1.1') || parts[2] === '1.1.1.1') {
+                    if (!fw_allow_new) {
+                        printOutput("PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.\\n\\n--- 1.1.1.1 ping statistics ---\\n1 packets transmitted, 0 received, 100% packet loss, time 0ms\\n[-] Network unreachable. Ensure your firewall permits outbound traffic to this IP.");
+                    } else {
+                        // Check if ALL conditions are met
+                        if (!fw_allow_c2 && fw_block_c2 && !systemd_alive && !payload_exists) {
+                            let out = "PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.\\n64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time=12.4 ms\\n\\n--- 1.1.1.1 ping statistics ---\\n1 packets transmitted, 1 received, 0% packet loss, time 12ms\\n";
+                            out += "\\n[+] CONNECTION ESTABLISHED. Mission Control acknowledges containment and eradication.\\n";
+                            
+                            const flag = "viceroy{c0nt41n3d_4nd_3r4d1c4t3d}";
+                            out += `[+] RECOVERY SUCCESSFUL. FLAG: <strong>${flag}</strong>\\n`;
+                            out += `<button class="copy-btn" onclick="copyFlag(this, '${flag}')">COPY FLAG TO CLIPBOARD</button>`;
+                            printOutput(out);
+                        } else {
+                            let out = "PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.\\n64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time=12.4 ms\\n\\n--- 1.1.1.1 ping statistics ---\\n1 packets transmitted, 1 received, 0% packet loss, time 12ms\\n";
+                            out += "\\n[-] Mission Control connection established, but system health/security checks FAILED.\\n";
+                            
+                            if (fw_allow_c2) out += "    * Rogue firewall rule for C2 server still exists.\\n";
+                            if (!fw_block_c2) out += "    * C2 Server (192.168.100.55) is not blocked.\\n";
+                            if (systemd_alive) out += "    * Malware process is still running in memory.\\n";
+                            if (payload_exists) out += "    * Malware payload still exists on disk.\\n";
+                            
+                            out += "[-] Eradicate all threats and secure the firewall before requesting the flag.";
+                            printOutput(out);
+                        }
+                    }
                 } else {
-                    if (fw_allow_c2) printOutput("[-] Rogue ACCEPT rule for C2 server (192.168.100.55) still exists. Delete it.");
-                    if (!fw_block_c2) printOutput("[-] C2 Server (192.168.100.55) is not blocked (DROP).");
-                    if (!fw_allow_new) printOutput("[-] Missing explicit ALLOW rule for legit external asset (1.1.1.1).");
-                }
-            }
-            else if (base === '3') {
-                printOutput("[*] Scanning endpoint health...");
-                if (systemd_alive || payload_exists) {
-                    if (systemd_alive) printOutput("[-] Malware process is still running in memory! Use 'kill -9 &lt;PID&gt;'.");
-                    if (payload_exists) printOutput("[-] Malware file still exists on disk! Delete it using 'rm'.");
-                } else {
-                    printOutput("[+] Threat Eradicated. FLAG_PART_2: d3f3nd3d}");
+                    printOutput(`ping: ${parts[1] || 'missing host'}: Name or service not known`);
                 }
             }
             else if (base === 'lsof') {
@@ -178,12 +248,10 @@ HTML_PAGE = """
                     printOutput("Rule added.");
                 } 
                 else if (cleanCmd.includes('-D OUTPUT')) {
-                    // Find the targeted line number
                     let numIndex = parts.indexOf('OUTPUT') + 1;
                     let lineNum = parseInt(parts[numIndex]);
                     
-                    // Map active rules to determine what the user is trying to delete
-                    let activeRules = ['r1', 'r2', 'r3']; // The 3 permanent good rules
+                    let activeRules = ['r1', 'r2', 'r3']; 
                     if (fw_allow_c2) activeRules.push('bad_allow');
                     if (fw_allow_new) activeRules.push('new_good');
                     if (fw_block_c2) activeRules.push('bad_drop');
@@ -232,15 +300,13 @@ HTML_PAGE = """
                     printOutput("rm: cannot remove: No such file or directory");
                 }
             }
+            else if (base === 'ufw') {
+                printOutput("Usage: ufw status");
+            }
             else {
                 printOutput(`bash: ${base}: command not found`);
             }
         }
-        
-        // Auto-focus input field if user clicks anywhere on the terminal
-        document.body.addEventListener('click', function() {
-            input.focus();
-        });
     </script>
 </body>
 </html>
