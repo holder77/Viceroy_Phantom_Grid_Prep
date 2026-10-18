@@ -8,12 +8,32 @@ HTML_PAGE = """
 <head>
     <title>SENTINEL-01 Terminal</title>
     <style>
-        body { background-color: #0b0f19; color: #00ffcc; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; }
-        #terminal { height: 90vh; overflow-y: auto; }
+        body { 
+            background-color: #0b0f19; 
+            color: #00ffcc; 
+            font-family: 'Courier New', Courier, monospace; 
+            margin: 0; 
+            padding: 20px; 
+            overflow: hidden; /* Prevents whole-page scrolling */
+        }
+        #terminal { 
+            height: 95vh; 
+            overflow-y: auto; /* Enables scrolling only inside the terminal window */
+            padding-bottom: 20px;
+        }
         .prompt { color: #ff3366; }
-        .input-line { display: flex; }
-        input { background: transparent; border: none; color: #00ffcc; font-family: 'Courier New', Courier, monospace; font-size: 16px; width: 100%; outline: none; margin-left: 10px; }
-        .output { white-space: pre-wrap; margin-bottom: 10px; line-height: 1.2; }
+        .input-line { display: flex; margin-top: 10px; }
+        input { 
+            background: transparent; 
+            border: none; 
+            color: #00ffcc; 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 16px; 
+            width: 100%; 
+            outline: none; 
+            margin-left: 10px; 
+        }
+        .output { white-space: pre-wrap; margin-bottom: 5px; line-height: 1.3; }
     </style>
 </head>
 <body>
@@ -26,8 +46,7 @@ HTML_PAGE = """
  3: Scan system health for flag
 
 * You are in a restricted terminal environment.
-* Enter a number (1-3) to execute system checks, or type native Linux commands.
-* Permitted actions: lsof, iptables, kill, rm, ls, clear, help
+* Enter '?' and press Enter to view available commands.
 ==========================================</div>
         <div id="output-container"></div>
         <div class="input-line">
@@ -39,11 +58,12 @@ HTML_PAGE = """
     <script>
         const input = document.getElementById('cmd');
         const outputContainer = document.getElementById('output-container');
+        const terminal = document.getElementById('terminal');
         
         // Game State Variables
-        let fw_allow_c2 = true; // Attacker added this rogue rule
-        let fw_block_c2 = false; // Team must add this
-        let fw_allow_mission = false; // Team must add this
+        let fw_allow_c2 = true;   // Attacker added this rogue rule (Must be deleted)
+        let fw_block_c2 = false;  // Team must add this
+        let fw_allow_new = false; // Team must add this (1.1.1.1)
         
         let systemd_alive = true; // Bad process
         let payload_exists = true; // Bad file
@@ -54,7 +74,6 @@ HTML_PAGE = """
                 input.value = '';
                 printOutput(`<span class="prompt">root@sentinel-01:~#</span> ${cmd}`);
                 processCommand(cmd);
-                window.scrollTo(0, document.body.scrollHeight);
             }
         });
 
@@ -63,6 +82,9 @@ HTML_PAGE = """
             div.className = 'output';
             div.innerHTML = text;
             outputContainer.appendChild(div);
+            
+            // Auto-scroll to the absolute bottom after new text is added
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
         function processCommand(cmd) {
@@ -73,8 +95,18 @@ HTML_PAGE = """
             const parts = cleanCmd.split(' ').filter(Boolean);
             const base = parts[0];
 
-            if (base === 'help') {
-                printOutput("Available commands: lsof, iptables, kill, rm, ls, clear<br>Options: 1 (Firewall), 2 (Check Network), 3 (Check Health)");
+            if (base === '?') {
+                printOutput(`Available Commands:
+  ?         - Show this help menu
+  1         - Print current firewall table
+  2         - Scan system network for flag
+  3         - Scan system health for flag
+  lsof      - List open files/connections
+  ls        - List directory contents
+  kill      - Terminate a process
+  rm        - Remove files
+  iptables  - Manage firewall rules
+  clear     - Clear terminal screen`);
             } 
             else if (base === 'clear') {
                 outputContainer.innerHTML = '';
@@ -83,22 +115,27 @@ HTML_PAGE = """
                 let out = "Chain OUTPUT (policy ACCEPT)\\n";
                 out += "num  target     prot opt source               destination\\n";
                 let num = 1;
-                out += `${num++}    ACCEPT     all  --  anywhere             10.0.0.200\\n`; // Decoy good rule
-                if (fw_allow_c2) out += `${num++}    ACCEPT     all  --  anywhere             192.168.100.55\\n`; // Rogue rule
-                if (fw_allow_mission) out += `${num++}    ACCEPT     all  --  anywhere             10.0.0.50\\n`;
+                out += `${num++}    ACCEPT     all  --  anywhere             10.0.0.50\\n`;
+                out += `${num++}    ACCEPT     all  --  anywhere             10.0.0.100\\n`;
+                out += `${num++}    ACCEPT     all  --  anywhere             10.0.0.200\\n`;
+                if (fw_allow_c2) out += `${num++}    ACCEPT     all  --  anywhere             192.168.100.55\\n`;
+                if (fw_allow_new) out += `${num++}    ACCEPT     all  --  anywhere             1.1.1.1\\n`;
                 if (fw_block_c2) out += `${num++}    DROP       all  --  anywhere             192.168.100.55\\n`;
+                
+                out += "\\n--- FIREWALL CHEATSHEET ---\\n";
+                out += "Add Allow Rule: iptables -A OUTPUT -d &lt;IP&gt; -j ACCEPT\\n";
+                out += "Add Block Rule: iptables -A OUTPUT -d &lt;IP&gt; -j DROP\\n";
+                out += "Delete Rule:    iptables -D OUTPUT &lt;LINE_NUMBER&gt;";
                 printOutput(out);
             }
             else if (base === '2') {
                 printOutput("[*] Analyzing firewall rules...");
-                if (!fw_allow_c2 && fw_block_c2 && fw_allow_mission) {
+                if (!fw_allow_c2 && fw_block_c2 && fw_allow_new) {
                     printOutput("[+] Network Secured. FLAG_PART_1: viceroy{f1r3w4ll_");
-                } else if (fw_allow_c2) {
-                    printOutput("[-] Rogue ACCEPT rule for C2 server still exists. Remove it.");
-                } else if (!fw_block_c2) {
-                    printOutput("[-] C2 Server (192.168.100.55) is not blocked (DROP).");
                 } else {
-                    printOutput("[-] Missing explicit ALLOW rule for mission controller (10.0.0.50).");
+                    if (fw_allow_c2) printOutput("[-] Rogue ACCEPT rule for C2 server (192.168.100.55) still exists. Delete it.");
+                    if (!fw_block_c2) printOutput("[-] C2 Server (192.168.100.55) is not blocked (DROP).");
+                    if (!fw_allow_new) printOutput("[-] Missing explicit ALLOW rule for legit external asset (1.1.1.1).");
                 }
             }
             else if (base === '3') {
@@ -132,20 +169,45 @@ HTML_PAGE = """
                 printOutput(out);
             }
             else if (base === 'iptables') {
-                if (cleanCmd.includes('-A OUTPUT') && cleanCmd.includes('10.0.0.50') && cleanCmd.includes('ACCEPT')) {
-                    fw_allow_mission = true;
+                if (cleanCmd.includes('-A OUTPUT') && cleanCmd.includes('-d 1.1.1.1') && cleanCmd.includes('-j ACCEPT')) {
+                    fw_allow_new = true;
                     printOutput("Rule added.");
                 } 
-                else if (cleanCmd.includes('-A OUTPUT') && cleanCmd.includes('192.168.100.55') && cleanCmd.includes('DROP')) {
+                else if (cleanCmd.includes('-A OUTPUT') && cleanCmd.includes('-d 192.168.100.55') && cleanCmd.includes('-j DROP')) {
                     fw_block_c2 = true;
                     printOutput("Rule added.");
                 } 
-                else if (cleanCmd.includes('-D OUTPUT') && (cleanCmd.includes('192.168.100.55') || cleanCmd.includes(' 2'))) {
-                    fw_allow_c2 = false;
-                    printOutput("Rule deleted.");
+                else if (cleanCmd.includes('-D OUTPUT')) {
+                    // Find the targeted line number
+                    let numIndex = parts.indexOf('OUTPUT') + 1;
+                    let lineNum = parseInt(parts[numIndex]);
+                    
+                    // Map active rules to determine what the user is trying to delete
+                    let activeRules = ['r1', 'r2', 'r3']; // The 3 permanent good rules
+                    if (fw_allow_c2) activeRules.push('bad_allow');
+                    if (fw_allow_new) activeRules.push('new_good');
+                    if (fw_block_c2) activeRules.push('bad_drop');
+                    
+                    if (lineNum > 0 && lineNum <= activeRules.length) {
+                        let target = activeRules[lineNum - 1];
+                        if (target === 'bad_allow') {
+                            fw_allow_c2 = false;
+                            printOutput("Rule deleted.");
+                        } else if (target === 'new_good') {
+                            fw_allow_new = false;
+                            printOutput("Rule deleted.");
+                        } else if (target === 'bad_drop') {
+                            fw_block_c2 = false;
+                            printOutput("Rule deleted.");
+                        } else {
+                            printOutput("[-] CRITICAL ERROR: Action blocked! You cannot delete a mission-critical rule.");
+                        }
+                    } else {
+                        printOutput("iptables: Index of deletion too big.");
+                    }
                 } 
                 else {
-                    printOutput("Rule accepted.");
+                    printOutput("[-] Action blocked or rule not required for this exercise.");
                 }
             }
             else if (base === 'kill') {
@@ -174,6 +236,11 @@ HTML_PAGE = """
                 printOutput(`bash: ${base}: command not found`);
             }
         }
+        
+        // Auto-focus input field if user clicks anywhere on the terminal
+        document.body.addEventListener('click', function() {
+            input.focus();
+        });
     </script>
 </body>
 </html>
