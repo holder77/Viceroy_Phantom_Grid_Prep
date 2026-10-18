@@ -165,17 +165,21 @@ Malicious File: systemd-update
             const parts = cleanCmd.split(' ').filter(Boolean);
             const base = parts[0];
 
-            if (base === '?') {
+if (base === '?') {
                 printOutput(`Available Commands:
   ?                  - Show this help menu
   ufw status         - Print current firewall table
-  ping <IP>          - Send ICMP ECHO_REQUEST to network hosts
+  ping &lt;IP&gt;          - Send ICMP ECHO_REQUEST to network hosts
   lsof               - List open files/connections
   ls                 - List directory contents
-  kill <PID>         - Terminate a process
-  rm <file_name>     - Remove files
-  clear              - Clear terminal screen`);
-            } 
+  kill &lt;PID&gt;         - Terminate a process
+  rm &lt;file_name&gt;     - Remove files
+  clear              - Clear terminal screen
+
+--- KNOWN INTEL ---
+  Malicious Host: 192.168.100.55
+  Malicious File: systemd-update`);
+            }
             else if (base === 'clear') {
                 outputContainer.innerHTML = '';
             }
