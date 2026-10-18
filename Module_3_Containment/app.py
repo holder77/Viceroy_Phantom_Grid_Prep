@@ -61,11 +61,14 @@ HTML_PAGE = """
     <div id="terminal">
         <!-- The Intro Screen -->
         <div id="intro-screen">
-            <div>==========================================</div>
-            <div>      SENTINEL-01 INCIDENT RESPONSE       </div>
-            <div>==========================================</div><br>
-            <div>You have successfully gained access to the terminal of SENTINEL-01 (as done in module 2: Identify every access point).</div><br>
+            <div>=======================================================================================</div>
+            <div>                           SENTINEL-01 INCIDENT RESPONSE       </div>
+            <div>=======================================================================================</div><br>
+            <div>You have successfully gained access to the terminal of SENTINEL-01 (Module 2)</div><br>
             <div>Now you need to perform phase 3 of incident response: Contain, Eradicate, and Recovery.</div><br>
+            <div>Intel (Module 1): .</div><br>
+            <div>Malicious Host: 192.168.100.55</div><br>
+            <div>Malicious File: systemd-update</div><br>
             <div><strong>TASKS:</strong></div>
             <div>- Identify and remove the rogue firewall rule.</div>
             <div>- Block the malicious C2 IP address.</div>
