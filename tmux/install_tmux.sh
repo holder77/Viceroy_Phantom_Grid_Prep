@@ -14,7 +14,7 @@ echo "[*] Building Tactical Tmux Command Post..."
 # Grab the exact absolute path to bypass Kali XFCE desktop shortcut bugs
 USER_HOME=$(eval echo ~$USER)
 
-# Create the interactive launcher script
+# Create the interactive launcher script with Pre-Deployment Briefing
 cat << 'EOF' > "$USER_HOME/Desktop/tmux-ops.sh"
 #!/bin/bash
 clear
@@ -34,6 +34,13 @@ echo "Move Cursor Between Panes   : Prefix then Arrow Keys"
 echo "Zoom/Fullscreen Active Pane : Prefix then z"
 echo "Detach (Leave Running)      : Prefix then d"
 echo -e "\e[1;32m========================================================\e[0m"
+echo -e "\e[1;31m[!] PRE-DEPLOYMENT BRIEFING - READ BEFORE PROCEEDING [!]\e[0m"
+echo -e "1. \e[1;37mALL OPERATORS:\e[0m You MUST be SSH'd into the shared Jump Box."
+echo -e "   (If you run this locally on your own laptop, multiplayer fails)."
+echo -e "2. \e[1;37mRECON:\e[0m Run this script and select [1] to establish the session."
+echo -e "3. \e[1;37mMAIN FORCE:\e[0m Wait for Recon. SSH into the Jump Box, run this"
+echo -e "   script, and select [2] to link your screen to Recon's feed."
+echo -e "\e[1;32m========================================================\e[0m"
 echo ""
 echo -e "\e[1;37m[1] Recon Forward Observer (INITIAL ENTRY - Create 'ops' session)\e[0m"
 echo -e "\e[1;37m[2] Main Expeditionary Force (OVERWATCH - Attach to 'ops' session)\e[0m"
@@ -46,7 +53,6 @@ if [ "$role" == "1" ]; then
     
     tmux has-session -t ops 2>/dev/null
     if [ $? != 0 ]; then
-        # Chain all commands synchronously so the terminal never loses track of the session
         exec tmux new-session -s ops \; \
             split-window -h \; \
             send-keys -t 0 "clear" C-m \; \
@@ -67,7 +73,6 @@ elif [ "$role" == "2" ]; then
     
     tmux has-session -t ops 2>/dev/null
     if [ $? == 0 ]; then
-        # Announce arrival in whichever pane is currently active
         tmux send-keys -t ops "echo -e '\e[1;32m[!] MAIN EXPEDITIONARY FORCE HAS JOINED THE SESSION\e[0m'" C-m
         exec tmux attach-session -t ops
     else
